@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zero-Trust Security Gateway | ESP32 SRAM PUF & Schnorr ZKP</title>
+  <meta name="description" content="Hardware-Bound Zero-Trust Authentication System using ESP32 SRAM PUF and Schnorr Zero-Knowledge Proof with Real-Time Security Telemetry and Physical Relay Control." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- Header Bar -->
+  <header class="top-nav">
+    <div class="nav-brand">
+      <div class="brand-shield">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="m9 12 2 2 4-4" stroke="#00f2fe" stroke-width="2.5"/>
+        </svg>
+      </div>
+      <div>
+        <h1>Hardware-Bound Zero-Trust Gateway</h1>
+        <p class="subtitle">ESP32 SRAM PUF &bull; Schnorr Zero-Knowledge Proof &bull; Physical Relay Access Control</p>
+      </div>
+    </div>
+    <div class="nav-telemetry">
+      <div class="telemetry-pill" id="wsStatusPill">
+        <span class="status-dot pulse-amber" id="wsDot"></span>
+        <span id="wsStatusText">Connecting...</span>
+      </div>
+      <div class="time-display" id="clockDisplay">--:--:-- UTC</div>
+    </div>
+  </header>
+
+  <!-- Main Grid Layout -->
+  <main class="dashboard-grid">
+
+    <!-- Column 1: Physical Relay & Attack Simulation Panel -->
+    <section class="grid-col col-left">
+      <!-- Physical Access & Relay Status Card -->
+      <div class="glass-card relay-card" id="relayCard">
+        <div class="card-header">
+          <div class="header-icon cyan-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+            </svg>
+          </div>
+          <h2>Physical Smart Lock Access</h2>
+          <span class="badge" id="relayModeBadge">FAIL-SECURE</span>
+        </div>
+
+        <div class="relay-display-zone">
+          <div class="lock-graphic-container">
+            <div class="lock-ring" id="lockRing"></div>
+            <div class="lock-icon-wrapper" id="lockIconWrapper">
+              <svg id="lockSvg" viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path id="lockShackle" d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+          </div>
+          <div class="relay-state-label">
+            <span class="status-lead">CURRENT STATE</span>
+            <span class="status-main state-locked" id="relayStatusText">LOCKED</span>
+          </div>
+        </div>
+
+        <div class="relay-details-list">
+          <div class="detail-row">
+            <span>GPIO Trigger Pin:</span>
+            <span class="mono-val">GPIO 22 (Active LOW)</span>
+          </div>
+          <div class="detail-row">
+            <span>Last Changed:</span>
+            <span class="mono-val" id="relayLastChanged">System Startup</span>
+          </div>
+          <div class="detail-row">
+            <span>Triggered By:</span>
+            <span class="mono-val" id="relayTriggeredBy">INIT</span>
+          </div>
+        </div>
+
+        <div class="relay-actions">
+          <button class="btn btn-secondary" id="btnRelayLock" onclick="handleRelayOverride('LOCKED')">Force Lock</button>
+          <button class="btn btn-primary" id="btnRelayUnlock" onclick="handleRelayOverride('UNLOCKED')">Emergency Unlock</button>
+        </div>
+      </div>
+
+      <!-- Interactive Attack & Test Simulation Suite -->
+      <div class="glass-card attack-suite-card">
+        <div class="card-header">
+          <div class="header-icon red-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          </div>
+          <h2>Live Attack & Test Simulator</h2>
+        </div>
+        <p class="section-desc">Trigger experimental test vectors against the live Zero-Trust Gateway to observe security responses:</p>
+        
+        <div class="attack-button-grid">
+          <button class="sim-btn sim-pass" id="btnSimLegit" onclick="triggerSimulation('legitimate')">
+            <div class="sim-btn-content">
+              <span class="sim-title">1. Legitimate ESP32</span>
+              <span class="sim-desc">Valid PUF response & Schnorr proof</span>
+            </div>
+            <span class="sim-tag tag-pass">ACCESS GRANTED</span>
+          </button>
+
+          <button class="sim-btn sim-warn" id="btnSimUnknown" onclick="triggerSimulation('unknown')">
+            <div class="sim-btn-content">
+              <span class="sim-title">2. Unknown Device</span>
+              <span class="sim-desc">Unregistered device ID attempt</span>
+            </div>
+            <span class="sim-tag tag-deny">ACCESS DENIED</span>
+          </button>
+
+          <button class="sim-btn sim-crit" id="btnSimReplay" onclick="triggerSimulation('replay')">
+            <div class="sim-btn-content">
+              <span class="sim-title">3. Replay Attack</span>
+              <span class="sim-desc">Reusing intercepted proof & token</span>
+            </div>
+            <span class="sim-tag tag-alert">REPLAY ALERT</span>
+          </button>
+
+          <button class="sim-btn sim-crit" id="btnSimModified" onclick="triggerSimulation('modified')">
+            <div class="sim-btn-content">
+              <span class="sim-title">4. Modified / Forged Proof</span>
+              <span class="sim-desc">Flipped response scalar bits</span>
+            </div>
+            <span class="sim-tag tag-alert">CRYPTO FAIL</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 2: Security Metrics, PUF Stats & Registered Devices -->
+    <section class="grid-col col-center">
+      <!-- Top Metric Counter Cards -->
+      <div class="metrics-row">
+        <div class="metric-card">
+          <span class="metric-title">TOTAL ATTEMPTS</span>
+          <span class="metric-value" id="valTotalAttempts">0</span>
+          <span class="metric-sub">Zero-Trust Sessions</span>
+        </div>
+        <div class="metric-card card-success">
+          <span class="metric-title">ACCEPTED (PASS)</span>
+          <span class="metric-value text-green" id="valAcceptedAttempts">0</span>
+          <span class="metric-sub">Verified PUF ZKP</span>
+        </div>
+        <div class="metric-card card-danger">
+          <span class="metric-title">REJECTED (DENIED)</span>
+          <span class="metric-value text-red" id="valRejectedAttempts">0</span>
+          <span class="metric-sub">Failed / Attacked</span>
+        </div>
+        <div class="metric-card">
+          <span class="metric-title">AVG VERIFY LATENCY</span>
+          <span class="metric-value text-cyan" id="valAvgLatency">-- ms</span>
+          <span class="metric-sub">secp256k1 Point Mult</span>
+        </div>
+      </div>
+
+      <!-- SRAM PUF Reliability & Academic Metrics -->
+      <div class="glass-card puf-card">
+        <div class="card-header">
+          <div class="header-icon purple-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+              <line x1="6" y1="6" x2="6.01" y2="6"/>
+              <line x1="6" y1="18" x2="6.01" y2="18"/>
+            </svg>
+          </div>
+          <h2>ESP32 SRAM PUF Statistical Fingerprint</h2>
+          <span class="badge badge-purple" id="pufBitSizeBadge">1024 BITS</span>
+        </div>
+
+        <div class="puf-metrics-grid">
+          <div class="puf-gauge">
+            <div class="gauge-header">
+              <span>Intra-Device HD (Stability)</span>
+              <strong id="valIntraHD">2.34%</strong>
+            </div>
+            <div class="gauge-bar"><div class="gauge-fill fill-green" id="barIntraHD" style="width: 97.66%;"></div></div>
+            <span class="gauge-footer">Ideal: 0.00% &bull; Reliability: 97.66%</span>
+          </div>
+
+          <div class="puf-gauge">
+            <div class="gauge-header">
+              <span>Inter-Device HD (Uniqueness)</span>
+              <strong id="valInterHD">49.82%</strong>
+            </div>
+            <div class="gauge-bar"><div class="gauge-fill fill-cyan" id="barInterHD" style="width: 99.64%;"></div></div>
+            <span class="gauge-footer">Ideal: 50.00% &bull; Uniqueness: 99.64%</span>
+          </div>
+
+          <div class="puf-gauge">
+            <div class="gauge-header">
+              <span>Bit Error Rate (BER)</span>
+              <strong id="valBER">2.34%</strong>
+            </div>
+            <div class="gauge-bar"><div class="gauge-fill fill-amber" id="barBER" style="width: 15%;"></div></div>
+            <span class="gauge-footer">Metastable cell noise across boots</span>
+          </div>
+
+          <div class="puf-gauge">
+            <div class="gauge-header">
+              <span>Shannon Entropy H(X)</span>
+              <strong id="valEntropy">0.9984</strong>
+            </div>
+            <div class="gauge-bar"><div class="gauge-fill fill-purple" id="barEntropy" style="width: 99.8%;"></div></div>
+            <span class="gauge-footer">Max 1.0000 bit/bit &bull; Unpredictable</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Enrolled Hardware Devices Directory -->
+      <div class="glass-card devices-card">
+        <div class="card-header">
+          <div class="header-icon amber-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M4 17l6-6-6-6"/>
+              <path d="M12 19h8"/>
+            </svg>
+          </div>
+          <h2>Enrolled Hardware Devices</h2>
+          <span class="badge" id="deviceCountBadge">0 Devices</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="devicesTable">
+            <thead>
+              <tr>
+                <th>Device ID</th>
+                <th>eFuse MAC</th>
+                <th>Trust Status</th>
+                <th>Schnorr Public Key</th>
+                <th>Pass / Fail</th>
+                <th>Last Seen</th>
+              </tr>
+            </thead>
+            <tbody id="devicesTableBody">
+              <tr>
+                <td colspan="6" class="text-center">Loading enrolled devices...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 3: Security Alerts & Live Audit Logs -->
+    <section class="grid-col col-right">
+      <!-- Active Security Alerts Banner -->
+      <div class="glass-card alerts-card">
+        <div class="card-header">
+          <div class="header-icon red-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <h2>Security Threat Alerts</h2>
+          <span class="badge badge-alert" id="alertsBadge">0 Alerts</span>
+        </div>
+        <div class="alerts-stream" id="alertsList">
+          <div class="empty-state">
+            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+              <polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <p>No active security threats detected. Zero-Trust perimeter secure.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Authentication Audit Trail -->
+      <div class="glass-card logs-card">
+        <div class="card-header">
+          <div class="header-icon cyan-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </div>
+          <h2>Authentication Audit Logs</h2>
+          <button class="btn-icon" onclick="fetchAuditLogs()" title="Refresh Logs">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/>
+              <polyline points="1 20 1 14 7 14"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+        </div>
+        <div class="logs-stream-container">
+          <div class="logs-stream" id="logsStream">
+            <!-- Dynamic logs rows injected here -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script src="/static/script.js"></script>
+</body>
+</html>

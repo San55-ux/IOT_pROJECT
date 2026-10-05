@@ -1,0 +1,45 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C / C++ / ESP32 Build Outputs
+*.o
+*.elf
+*.bin
+*.hex
+*.out
+build/
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# SQLite Database & Storage (Generated at runtime)
+*.db
+*.sqlite
+*.sqlite3
+database/zerotrust.db
+
+# Virtual Environments
+venv/
+.venv/
+env/
+ENV/
+
+# IDE & Editor Settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+.idea/
+*.swp
+*.swo
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs & Temporary Files
+*.log
+scratch/
