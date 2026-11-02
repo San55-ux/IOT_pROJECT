@@ -15,6 +15,7 @@ from backend.crypto.schnorr_verifier import (
     SchnorrProtocol, decode_point, encode_point, Point
 )
 from backend.services.alert_service import AlertService
+from backend.services.puf_health_service import PufHealthService
 
 
 class AuthService:
@@ -77,12 +78,39 @@ class AuthService:
         }
 
     @staticmethod
-    def create_challenge(device_id: str, commitment_hex: str) -> Dict[str, Any]:
+    def deregister_device(device_id: str) -> Dict[str, Any]:
+        """
+        Removes a device from the Zero-Trust Gateway directory.
+        Future authentication attempts by this device will be rejected as UNKNOWN_DEVICE.
+        """
+        existing = Database.fetch_one("SELECT id FROM devices WHERE device_id = ?", (device_id,))
+        if not existing:
+            raise ValueError(f"Device '{device_id}' is not enrolled in the Gateway directory.")
+
+        Database.execute("DELETE FROM devices WHERE device_id = ?", (device_id,))
+        Database.execute("DELETE FROM auth_sessions WHERE device_id = ?", (device_id,))
+        
+        # Log deregistration event
+        AuthService._log_attempt(device_id, "DEREGISTERED", 0.0, "Device removed from Zero-Trust directory", "GATEWAY_ADMIN")
+
+        return {
+            "success": True,
+            "message": f"Device '{device_id}' successfully deregistered. Status: UNREGISTERED.",
+            "device_id": device_id
+        }
+
+    @staticmethod
+    def create_challenge(
+        device_id: str,
+        commitment_hex: str,
+        telemetry: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
         """
         Initiates 3-pass Schnorr Identification:
         1. Validates device identity in directory
         2. Validates commitment point R
         3. Generates fresh random challenge c with strict TTL
+        4. Evaluates ML PUF Health and environmental drift telemetry
         """
         device = Database.fetch_one("SELECT device_id FROM devices WHERE device_id = ?", (device_id,))
         if not device:
@@ -92,7 +120,8 @@ class AuthService:
                 severity="HIGH",
                 device_id=device_id
             )
-            raise ValueError(f"Device '{device_id}' is not enrolled in Zero-Trust Gateway.")
+            AuthService._log_attempt(device_id, "FAILED", 0.0, "Device not registered in Gateway directory", None)
+            raise ValueError(f"Device '{device_id}' is not enrolled in Zero-Trust Gateway. Access Denied: Device Locked.")
 
         # Validate commitment point R is valid curve point
         try:
@@ -118,11 +147,20 @@ class AuthService:
             expires_at.strftime("%Y-%m-%d %H:%M:%S")
         ))
 
+        # Evaluate ML PUF Health telemetry
+        puf_health = None
+        if telemetry:
+            temp_c = float(telemetry.get("temperature", 35.0))
+            volt_v = float(telemetry.get("voltage", 3.30))
+            boots = int(telemetry.get("boot_count", 1))
+            puf_health = PufHealthService.evaluate_telemetry(device_id, temp_c, volt_v, boots)
+
         return {
             "session_id": session_id,
             "device_id": device_id,
             "challenge": challenge_hex,
-            "expires_in_seconds": CHALLENGE_TTL_SECONDS
+            "expires_in_seconds": CHALLENGE_TTL_SECONDS,
+            "puf_health": puf_health
         }
 
     @staticmethod
@@ -229,7 +267,7 @@ class AuthService:
             return {
                 "authenticated": False,
                 "trust_status": "UNTRUSTED",
-                "message": "Authentication failed: Device not found.",
+                "message": "Authentication failed: Device not found. Access Denied: Device Locked.",
                 "relay_status": "LOCKED",
                 "latency_ms": round(latency, 2)
             }
@@ -264,13 +302,16 @@ class AuthService:
             """, (now_str, device_id, auto_lock))
 
             AuthService._log_attempt(device_id, "SUCCESS", latency, None, client_ip)
+            recent_telemetry = PufHealthService.get_recent_telemetry(device_id, limit=1)
+            latest_health = recent_telemetry[0] if recent_telemetry else None
 
             return {
                 "authenticated": True,
                 "trust_status": "TRUSTED",
                 "message": "Schnorr Zero-Knowledge Proof verified successfully. Hardware PUF identity confirmed.",
                 "relay_status": "UNLOCKED",
-                "latency_ms": round(latency, 2)
+                "latency_ms": round(latency, 2),
+                "puf_health": latest_health
             }
         else:
             # Verification failed: invalid secret / tampered proof
@@ -298,13 +339,16 @@ class AuthService:
             )
 
             AuthService._log_attempt(device_id, "FAILED", latency, "Invalid Schnorr proof", client_ip)
+            recent_telemetry = PufHealthService.get_recent_telemetry(device_id, limit=1)
+            latest_health = recent_telemetry[0] if recent_telemetry else None
 
             return {
                 "authenticated": False,
                 "trust_status": "UNTRUSTED",
                 "message": "Authentication rejected: Invalid cryptographic proof.",
                 "relay_status": "LOCKED",
-                "latency_ms": round(latency, 2)
+                "latency_ms": round(latency, 2),
+                "puf_health": latest_health
             }
 
     @staticmethod

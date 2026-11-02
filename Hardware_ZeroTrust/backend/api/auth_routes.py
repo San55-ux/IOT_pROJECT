@@ -22,19 +22,36 @@ async def generate_challenge(req: AuthChallengeRequest):
     Gateway Verifier returns single-use ephemeral challenge c.
     """
     try:
+        telemetry_dict = req.telemetry.model_dump() if req.telemetry else None
         challenge_data = AuthService.create_challenge(
             device_id=req.device_id,
-            commitment_hex=req.commitment
+            commitment_hex=req.commitment,
+            telemetry=telemetry_dict
         )
-        # Notify dashboard of challenge initiation
+        # Notify dashboard of challenge initiation & PUF health
         await ws_manager.broadcast({
             "event": "AUTH_CHALLENGE_ISSUED",
             "device_id": req.device_id,
             "session_id": challenge_data["session_id"],
-            "expires_in": challenge_data["expires_in_seconds"]
+            "expires_in": challenge_data["expires_in_seconds"],
+            "puf_health": challenge_data.get("puf_health")
         })
         return challenge_data
     except ValueError as e:
+        recent_alerts = AlertService.get_recent_alerts(limit=5)
+        await ws_manager.broadcast({
+            "event": "SECURITY_ALERT",
+            "alerts": recent_alerts
+        })
+        await ws_manager.broadcast({
+            "event": "AUTH_VERIFICATION_COMPLETE",
+            "device_id": req.device_id,
+            "authenticated": False,
+            "trust_status": "UNREGISTERED",
+            "relay_status": AuthService.get_relay_status()["status"],
+            "latency_ms": 0.0,
+            "message": str(e)
+        })
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Internal challenge generation error: {str(e)}")
@@ -63,7 +80,8 @@ async def verify_proof(req: AuthVerifyRequest, request: Request):
         "trust_status": result["trust_status"],
         "relay_status": result["relay_status"],
         "latency_ms": result["latency_ms"],
-        "message": result["message"]
+        "message": result["message"],
+        "puf_health": result.get("puf_health")
     })
 
     # If verification caused an alert, broadcast alerts update

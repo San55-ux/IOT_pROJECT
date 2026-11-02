@@ -63,6 +63,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def add_no_cache_headers(request: Request, call_next):
+    """Prevents aggressive browser caching of dashboard static assets during development."""
+    response = await call_next(request)
+    if (request.url.path.startswith("/static") or 
+        request.url.path == "/" or 
+        request.url.path.endswith(".css") or 
+        request.url.path.endswith(".js")):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        response.headers["Pragma"] = "no-cache"
+        response.headers["Expires"] = "0"
+    return response
+
 # Mount API routers (both /api prefix and root level for ESP32 conceptual routes)
 app.include_router(auth_router, prefix="/api", tags=["Authentication"])
 app.include_router(auth_router, tags=["Authentication Root"])
@@ -70,18 +83,14 @@ app.include_router(device_router, prefix="/api", tags=["Device Management"])
 app.include_router(device_router, tags=["Device Management Root"])
 app.include_router(ws_router, tags=["WebSockets"])
 
-# Serve dashboard static assets
+# Serve dashboard static assets (both /static and root for relative asset paths)
 if DASHBOARD_DIR.exists():
     app.mount("/static", StaticFiles(directory=str(DASHBOARD_DIR)), name="static")
-
-
-@app.get("/")
-async def root():
-    """Serves the real-time security dashboard."""
-    index_file = DASHBOARD_DIR / "index.html"
-    if index_file.exists():
-        return FileResponse(index_file)
-    return {"message": "Zero-Trust Gateway Online. Dashboard not found at default path."}
+    app.mount("/", StaticFiles(directory=str(DASHBOARD_DIR), html=True), name="dashboard_root")
+else:
+    @app.get("/")
+    async def root():
+        return {"message": "Zero-Trust Gateway Online. Dashboard directory not found."}
 
 
 @app.get("/health")

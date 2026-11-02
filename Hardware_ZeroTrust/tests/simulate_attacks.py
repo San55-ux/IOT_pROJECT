@@ -231,6 +231,75 @@ class AttackSimulator:
         print(f"\n[CONCLUSION] Scenario 4: {'PASSED (TAMPERED PROOF DETECTED & DENIED)' if success else 'FAILED'}")
         return success
 
+    # --------------------------------------------------------------------------
+    # Scenario 5: Physical Freeze Spray Tamper Attack (-15°C) (Option 3 ML)
+    # --------------------------------------------------------------------------
+    def run_scenario_5_freeze_tamper(self) -> bool:
+        self.print_header("Scenario 5: Physical Freeze Tamper Attack (Option 3 ML)")
+        device_id = "ESP32-AUTH-NODE"
+        secret_x = 0x55aa55aa1234567890abcdef1234567890abcdef1234567890abcdef12345678
+        k, R = SchnorrProtocol.generate_commitment()
+
+        print("[Attacker] Applying thermal freeze spray (-15.0°C) to alter SRAM metastability...")
+        chal_res = requests.post(f"{self.gateway_url}/api/auth/challenge", json={
+            "device_id": device_id,
+            "commitment": encode_point(R, compressed=True),
+            "telemetry": {
+                "temperature": -15.0,
+                "voltage": 3.30,
+                "boot_count": 50
+            }
+        }).json()
+
+        puf_health = chal_res.get("puf_health", {})
+        print(f"[ML Gateway Telemetry Evaluation]")
+        print(f"  -> Die Temperature : {puf_health.get('temperature_c')} °C")
+        print(f"  -> Predicted BER   : {puf_health.get('predicted_ber_pct')} %")
+        print(f"  -> Health Score    : {puf_health.get('health_score')} %")
+        print(f"  -> Status / Flag   : {puf_health.get('status')}")
+        print(f"  -> Tamper Detected : {puf_health.get('is_tamper')}")
+
+        alerts = requests.get(f"{self.gateway_url}/api/alerts?limit=1").json().get("alerts", [])
+        alert_triggered = any("PHYSICAL_TAMPER" in a.get("alert_type", "") for a in alerts)
+
+        success = puf_health.get("is_tamper") is True and alert_triggered
+        print(f"\n[CONCLUSION] Scenario 5: {'PASSED (FREEZE TAMPER IDENTIFIED & CRITICAL ALERT TRIGGERED)' if success else 'FAILED'}")
+        return success
+
+    # --------------------------------------------------------------------------
+    # Scenario 6: Voltage Glitch Fault Injection Attack (2.65V) (Option 3 ML)
+    # --------------------------------------------------------------------------
+    def run_scenario_6_voltage_glitch(self) -> bool:
+        self.print_header("Scenario 6: Voltage Glitch Fault Injection Attack (Option 3 ML)")
+        device_id = "ESP32-AUTH-NODE"
+        k, R = SchnorrProtocol.generate_commitment()
+
+        print("[Attacker] Inducing rapid supply rail undervolting (2.65V) to glitch memory...")
+        chal_res = requests.post(f"{self.gateway_url}/api/auth/challenge", json={
+            "device_id": device_id,
+            "commitment": encode_point(R, compressed=True),
+            "telemetry": {
+                "temperature": 35.0,
+                "voltage": 2.65,
+                "boot_count": 50
+            }
+        }).json()
+
+        puf_health = chal_res.get("puf_health", {})
+        print(f"[ML Gateway Telemetry Evaluation]")
+        print(f"  -> Supply Rail VDD : {puf_health.get('voltage_v')} V")
+        print(f"  -> Predicted BER   : {puf_health.get('predicted_ber_pct')} %")
+        print(f"  -> Health Score    : {puf_health.get('health_score')} %")
+        print(f"  -> Status / Flag   : {puf_health.get('status')}")
+        print(f"  -> Tamper Detected : {puf_health.get('is_tamper')}")
+
+        alerts = requests.get(f"{self.gateway_url}/api/alerts?limit=1").json().get("alerts", [])
+        alert_triggered = any("PHYSICAL_TAMPER" in a.get("alert_type", "") for a in alerts)
+
+        success = puf_health.get("is_tamper") is True and alert_triggered
+        print(f"\n[CONCLUSION] Scenario 6: {'PASSED (VOLTAGE GLITCH IDENTIFIED & CRITICAL ALERT TRIGGERED)' if success else 'FAILED'}")
+        return success
+
     def run_all(self):
         print("\n" + "#" * 70)
         print("  HARDWARE-BOUND ZERO-TRUST COMPLETE SECURITY VERIFICATION")
@@ -243,14 +312,20 @@ class AttackSimulator:
         s3 = self.run_scenario_3_replay()
         time.sleep(1)
         s4 = self.run_scenario_4_modified_proof()
+        time.sleep(1)
+        s5 = self.run_scenario_5_freeze_tamper()
+        time.sleep(1)
+        s6 = self.run_scenario_6_voltage_glitch()
 
         print("\n" + "=" * 70)
         print("  DEMONSTRATION SUMMARY MATRIX")
         print("=" * 70)
-        print(f"  Scenario 1 (Authorized ESP32)     : {'[PASSED] Access Granted & Relay ON' if s1 else '[FAILED]'}")
-        print(f"  Scenario 2 (Unauthorized Device)   : {'[PASSED] Access Denied & Relay Locked' if s2 else '[FAILED]'}")
+        print(f"  Scenario 1 (Authorized ESP32)     : {'[PASSED] Access Granted & SG90 Unlocked' if s1 else '[FAILED]'}")
+        print(f"  Scenario 2 (Unauthorized Device)   : {'[PASSED] Access Denied & SG90 Locked' if s2 else '[FAILED]'}")
         print(f"  Scenario 3 (Replay Attack)         : {'[PASSED] Replay Rejected & Threat Alert' if s3 else '[FAILED]'}")
         print(f"  Scenario 4 (Modified Proof)        : {'[PASSED] Math Failure & Access Blocked' if s4 else '[FAILED]'}")
+        print(f"  Scenario 5 (Freeze Tamper -15°C)   : {'[PASSED] AI Freeze Attack Detected' if s5 else '[FAILED]'}")
+        print(f"  Scenario 6 (Voltage Glitch 2.65V)  : {'[PASSED] AI Fault Injection Detected' if s6 else '[FAILED]'}")
         print("=" * 70 + "\n")
 
 

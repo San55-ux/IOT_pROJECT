@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="stylesheet" href="style.css?v=2.2" />
 </head>
 <body>
   <!-- Header Bar -->
@@ -62,6 +62,25 @@
               </svg>
             </div>
           </div>
+
+          <!-- SG90 Micro Servo Mechanical Actuator Graphic -->
+          <div class="servo-visual-box">
+            <div class="servo-arm-wrapper">
+              <div class="servo-chassis">
+                <div class="servo-gear-pivot">
+                  <div class="servo-horn horn-locked" id="servoHorn">
+                    <div class="servo-blade"></div>
+                    <div class="servo-dot"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="servo-readout">
+              <span class="servo-name">SG90 SERVO (GPIO 22)</span>
+              <strong class="servo-angle" id="servoAngleText">0° LOCKED</strong>
+            </div>
+          </div>
+
           <div class="relay-state-label">
             <span class="status-lead">CURRENT STATE</span>
             <span class="status-main state-locked" id="relayStatusText">LOCKED</span>
@@ -70,8 +89,8 @@
 
         <div class="relay-details-list">
           <div class="detail-row">
-            <span>GPIO Trigger Pin:</span>
-            <span class="mono-val">GPIO 22 (Active LOW)</span>
+            <span>Actuator Type / Pin:</span>
+            <span class="mono-val">SG90 Servo / GPIO 22 (PWM)</span>
           </div>
           <div class="detail-row">
             <span>Last Changed:</span>
@@ -84,8 +103,57 @@
         </div>
 
         <div class="relay-actions">
-          <button class="btn btn-secondary" id="btnRelayLock" onclick="handleRelayOverride('LOCKED')">Force Lock</button>
-          <button class="btn btn-primary" id="btnRelayUnlock" onclick="handleRelayOverride('UNLOCKED')">Emergency Unlock</button>
+          <button class="btn btn-secondary" id="btnRelayLock" onclick="handleRelayOverride('LOCKED')">Force Lock (0°)</button>
+          <button class="btn btn-primary" id="btnRelayUnlock" onclick="handleRelayOverride('UNLOCKED')">Emergency Unlock (90°)</button>
+        </div>
+      </div>
+
+      <!-- Option 3 ML: SRAM PUF Health & Environmental Drift Predictor Card -->
+      <div class="glass-card puf-ml-card" id="pufMlCard">
+        <div class="card-header">
+          <div class="header-icon green-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              <circle cx="12" cy="12" r="3"/>
+            </svg>
+          </div>
+          <h2>AI PUF Health & Drift Engine</h2>
+          <span class="badge badge-green" id="pufHealthBadge">ML OPTIMAL</span>
+        </div>
+
+        <div class="ml-health-display">
+          <div class="health-dial-container">
+            <div class="health-score-val" id="mlHealthScore">94.5%</div>
+            <span class="health-score-label">SILICON HEALTH</span>
+          </div>
+          <div class="ml-telemetry-stats">
+            <div class="telemetry-item">
+              <span class="tel-label">ESP32 Die Temp:</span>
+              <strong class="tel-val text-cyan" id="telTemp">35.0 °C</strong>
+            </div>
+            <div class="telemetry-item">
+              <span class="tel-label">Supply Rail VDD:</span>
+              <strong class="tel-val text-green" id="telVolt">3.30 V</strong>
+            </div>
+            <div class="telemetry-item">
+              <span class="tel-label">Predicted BER:</span>
+              <strong class="tel-val text-purple" id="telBer">1.85 %</strong>
+            </div>
+            <div class="telemetry-item">
+              <span class="tel-label">Hardware Integrity:</span>
+              <strong class="tel-val text-green" id="telStatus">NORMAL (SECURE)</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="ml-gauge-bar-wrapper">
+          <div class="gauge-header">
+            <span>Operating Noise vs Error-Correction Budget (15% Max)</span>
+            <span id="telStabilityMargin">87.7% Margin</span>
+          </div>
+          <div class="gauge-bar">
+            <div class="gauge-fill fill-green" id="mlBerBar" style="width: 12%;"></div>
+          </div>
         </div>
       </div>
 
@@ -132,6 +200,23 @@
               <span class="sim-desc">Flipped response scalar bits</span>
             </div>
             <span class="sim-tag tag-alert">CRYPTO FAIL</span>
+          </button>
+
+          <!-- New Environmental & Tamper Attack Simulations (Option 3 ML) -->
+          <button class="sim-btn sim-crit" id="btnSimFreeze" onclick="triggerSimulation('freeze_tamper')">
+            <div class="sim-btn-content">
+              <span class="sim-title">5. Freeze Attack (-15°C)</span>
+              <span class="sim-desc">Thermal shock side-channel tamper</span>
+            </div>
+            <span class="sim-tag tag-alert">TAMPER DETECT</span>
+          </button>
+
+          <button class="sim-btn sim-crit" id="btnSimVoltage" onclick="triggerSimulation('voltage_glitch')">
+            <div class="sim-btn-content">
+              <span class="sim-title">6. Voltage Glitch (2.7V)</span>
+              <span class="sim-desc">Power rail fault injection</span>
+            </div>
+            <span class="sim-tag tag-alert">GLITCH DETECT</span>
           </button>
         </div>
       </div>
@@ -214,6 +299,60 @@
             <div class="gauge-bar"><div class="gauge-fill fill-purple" id="barEntropy" style="width: 99.8%;"></div></div>
             <span class="gauge-footer">Max 1.0000 bit/bit &bull; Unpredictable</span>
           </div>
+      </div>
+
+      <!-- Option 3 ML: Silicon Drift & Anomaly Predictor Interactive Graph Card -->
+      <div class="glass-card ml-graph-card" id="mlGraphCard">
+        <div class="card-header">
+          <div class="header-icon purple-icon">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 3v18h18"/>
+              <path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"/>
+            </svg>
+          </div>
+          <h2>ML Silicon Drift & Anomaly Analytics</h2>
+          <div class="graph-tab-group">
+            <button class="graph-tab active" id="tabTrendBtn" onclick="switchMlGraphTab('trend')">BER Drift Curve</button>
+            <button class="graph-tab" id="tabPhaseBtn" onclick="switchMlGraphTab('phase')">Tamper Phase Space</button>
+          </div>
+        </div>
+
+        <!-- Quick Telemetry Telemetry Metric Bar -->
+        <div class="ml-graph-quickstats">
+          <div class="quickstat-item">
+            <span class="qs-label">Die Temp</span>
+            <strong class="qs-val text-cyan" id="gStatTemp">35.0 °C</strong>
+          </div>
+          <div class="quickstat-item">
+            <span class="qs-label">VDD Rail</span>
+            <strong class="qs-val text-green" id="gStatVolt">3.30 V</strong>
+          </div>
+          <div class="quickstat-item">
+            <span class="qs-label">Predicted BER</span>
+            <strong class="qs-val text-purple" id="gStatBer">1.85%</strong>
+          </div>
+          <div class="quickstat-item">
+            <span class="qs-label">BCH Threshold</span>
+            <strong class="qs-val text-red">15.0% Max</strong>
+          </div>
+          <div class="quickstat-item">
+            <span class="qs-label">ML Assessment</span>
+            <span class="badge badge-green" id="gStatStatus">NOMINAL (SECURE)</span>
+          </div>
+        </div>
+
+        <!-- Interactive Canvas Viewport -->
+        <div class="canvas-wrapper" id="canvasWrapper" style="min-height: 220px; width: 100%;">
+          <canvas id="mlGraphCanvas" height="220" style="width: 100%; height: 220px; display: block;"></canvas>
+          <div id="mlGraphTooltip" class="graph-tooltip" style="display: none;"></div>
+        </div>
+
+        <!-- Legend and Control Controls -->
+        <div class="ml-graph-legend" id="mlGraphLegend">
+          <div class="legend-item"><span class="legend-dot cyan-dot"></span> Die Temp (°C)</div>
+          <div class="legend-item"><span class="legend-dot purple-dot"></span> ML Predicted BER (%)</div>
+          <div class="legend-item"><span class="legend-dot green-dot"></span> Health Score (%)</div>
+          <div class="legend-item"><span class="legend-line red-dash"></span> 15% Error Budget Limit</div>
         </div>
       </div>
 
@@ -239,11 +378,12 @@
                 <th>Schnorr Public Key</th>
                 <th>Pass / Fail</th>
                 <th>Last Seen</th>
+                <th>Action</th>
               </tr>
             </thead>
             <tbody id="devicesTableBody">
               <tr>
-                <td colspan="6" class="text-center">Loading enrolled devices...</td>
+                <td colspan="7" class="text-center">Loading enrolled devices...</td>
               </tr>
             </tbody>
           </table>
@@ -307,6 +447,6 @@
   <!-- Notification Toast Container -->
   <div id="toastContainer" class="toast-container"></div>
 
-  <script src="/static/script.js"></script>
+  <script src="script.js?v=2.2"></script>
 </body>
 </html>

@@ -10,11 +10,13 @@ This document outlines the electrical schematic, component specifications, GPIO 
 
 | ESP32 DevKit V1 Pin | Pin Type | Connected Device Pin | Function / Description |
 |----------------------|----------|----------------------|------------------------|
-| **GPIO 22** | Digital Output | Relay Module **IN** | Controls the optocoupler driving the relay coil. Active LOW. |
+| **GPIO 22** | Digital Output | Relay Module **IN** / SG90 Servo PWM | Controls the relay / servo actuator lock mechanism. |
+| **GPIO 19 (D19)** | Digital Output | **Red LED** (via 220Ω - 330Ω) | **Locked Indicator**: ON when door lock is closed/secure. |
+| **GPIO 23 (D23)** | Digital Output | **Green LED** (via 220Ω - 330Ω) | **Unlocked Indicator**: ON when door is unlocked (open). |
 | **GPIO 0 (BOOT)** | Digital Input (Pull-up) | Tactile Pushbutton / Ground | Manual access request trigger (on-demand authentication). |
-| **GPIO 2** | Digital Output | Built-in Blue LED | Visual indicator: High during authentication cycle. |
-| **VIN (5V Rail)** | Power Input / 5V Rail | External 5V DC Supply (+) | Supplies 5V to ESP32 onboard regulator and Relay VCC. |
-| **GND** | Ground | Relay Module **GND** & Power GND | Common electrical return path for logic and control. |
+| **GPIO 2** | Digital Output | Built-in Blue LED | Visual indicator: High during Schnorr authentication cycle. |
+| **VIN (5V Rail)** | Power Input / 5V Rail | External 5V DC Supply (+) | Supplies 5V to ESP32 onboard regulator and Relay/Servo VCC. |
+| **GND** | Ground | Relay Module / LED Cathodes & GND | Common electrical return path for logic, LEDs, and power. |
 
 ---
 
@@ -58,6 +60,16 @@ This document outlines the electrical schematic, component specifications, GPIO 
                     │       Common Ground
                     ▼
           +12V Auxiliary Supply (+)
+
+---------------------------------------------------------------------------------
+  STATUS LED INDICATOR SUBCIRCUIT (RED = LOCKED, GREEN = RELEASED / UNLOCKED)
+---------------------------------------------------------------------------------
+
+  ESP32 GPIO 19 ───► [ 220Ω / 330Ω ] ───► Anode [ RED LED ] Cathode ───┐
+                                                                        │
+  ESP32 GPIO 23 ───► [ 220Ω / 330Ω ] ───► Anode [ GREEN LED ] Cathode ─┤
+                                                                        ▼
+                                                                   ESP32 GND
 ```
 
 ---

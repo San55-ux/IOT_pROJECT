@@ -161,6 +161,33 @@ class TestGatewayAPI(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["status"], "UNLOCKED")
 
+    def test_device_deregistration(self):
+        """Verifies device deregistration and subsequent challenge rejection."""
+        device_id = "ESP32-TO-DEREGISTER"
+        pub_pt = SchnorrProtocol.derive_public_key(12345)
+        pub_hex = encode_point(pub_pt, compressed=True)
+
+        # 1. Register device
+        self.client.post("/api/device/register", json={
+            "device_id": device_id,
+            "mac_address": "AA:BB:CC:DD:EE:FF",
+            "public_key": pub_hex
+        })
+
+        # 2. Deregister device
+        del_res = self.client.delete(f"/api/device/{device_id}")
+        self.assertEqual(del_res.status_code, 200)
+        self.assertTrue(del_res.json()["success"])
+
+        # 3. Attempt authentication as unregistered device -> must fail
+        k, R = SchnorrProtocol.generate_commitment()
+        chal_res = self.client.post("/api/auth/challenge", json={
+            "device_id": device_id,
+            "commitment": encode_point(R, compressed=True)
+        })
+        self.assertEqual(chal_res.status_code, 400)
+        self.assertIn("not enrolled", chal_res.json()["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

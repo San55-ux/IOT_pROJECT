@@ -22,9 +22,16 @@ class DeviceRegisterResponse(BaseModel):
     trust_status: str
 
 
+class TelemetryPayload(BaseModel):
+    temperature: Optional[float] = Field(None, description="ESP32 internal die temperature in °C")
+    voltage: Optional[float] = Field(3.30, description="ESP32 supply rail voltage in V")
+    boot_count: Optional[int] = Field(1, description="Boot / power cycle counter")
+
+
 class AuthChallengeRequest(BaseModel):
     device_id: str = Field(..., description="Registered Device ID requesting authentication")
     commitment: str = Field(..., description="Schnorr Commitment Point R = k*G in hex")
+    telemetry: Optional[TelemetryPayload] = Field(None, description="Optional hardware sensor telemetry")
 
 
 class AuthChallengeResponse(BaseModel):
@@ -32,6 +39,7 @@ class AuthChallengeResponse(BaseModel):
     device_id: str
     challenge: str = Field(..., description="Ephemeral 256-bit challenge scalar c in hex")
     expires_in_seconds: int
+    puf_health: Optional[dict] = Field(None, description="ML PUF health prediction")
 
 
 class AuthVerifyRequest(BaseModel):
@@ -46,6 +54,7 @@ class AuthVerifyResponse(BaseModel):
     message: str
     relay_status: str
     latency_ms: float
+    puf_health: Optional[dict] = None
 
 
 class RelayOverrideRequest(BaseModel):

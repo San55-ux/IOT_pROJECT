@@ -53,6 +53,18 @@ CREATE TABLE IF NOT EXISTS relay_state (
     auto_lock_at TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS puf_telemetry (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id TEXT NOT NULL,
+    temperature REAL NOT NULL,
+    voltage REAL DEFAULT 3.3,
+    boot_count INTEGER DEFAULT 1,
+    predicted_ber REAL NOT NULL,
+    health_score REAL NOT NULL,
+    status TEXT NOT NULL,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Seed initial relay row
 INSERT OR IGNORE INTO relay_state (id, status, triggered_by) VALUES (1, 'LOCKED', 'SYSTEM_INIT');
 
@@ -61,3 +73,5 @@ CREATE INDEX IF NOT EXISTS idx_devices_device_id ON devices(device_id);
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_device ON auth_sessions(device_id);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON authentication_logs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_alerts_timestamp ON security_alerts(timestamp);
+CREATE INDEX IF NOT EXISTS idx_telemetry_device ON puf_telemetry(device_id);
+CREATE INDEX IF NOT EXISTS idx_telemetry_timestamp ON puf_telemetry(timestamp);

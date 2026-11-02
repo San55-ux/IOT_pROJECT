@@ -18,17 +18,24 @@
 #include <esp_mac.h>
 #include <esp_chip_info.h>
 
-#include "esp32/puf/sram_puf.h"
-#include "esp32/crypto/schnorr.h"
-#include "esp32/wifi/wifi_client.h"
-#include "esp32/relay/relay_control.h"
+#include "sram_puf.h"
+#include "schnorr.h"
+#include "wifi_client.h"
+#include "relay_control.h"
 
 // =============================================================================
 // Configuration Constants
 // =============================================================================
 #define WIFI_SSID           "No"
 #define WIFI_PASSWORD       "Sanjay12"
-#define GATEWAY_SERVER_URL  "http://10.148.225.139:8000"  // Set to Python Gateway Host IP
+#define GATEWAY_SERVER_URL  "http://10.15.78.139:8000"  // Set to Python Gateway Host IP
+
+// -----------------------------------------------------------------------------
+// Device Role Configuration
+// Set to true  -> Authorized / Registered Device (Enrolls with Gateway & Authenticates)
+// Set to false -> Rogue / Unregistered Device (Skips Enrollment to test Zero-Trust rejection)
+// -----------------------------------------------------------------------------
+#define IS_REGISTERED_DEVICE  false
 
 #define AUTH_TRIGGER_PIN    0      // BOOT button on ESP32 DevKit (GPIO 0)
 #define STATUS_LED_PIN      2      // Built-in LED on most ESP32 boards
@@ -169,11 +176,13 @@ bool perform_schnorr_authentication(void) {
     }
     Serial.printf("[ZKP] 1. Commitment R: %s\n", commitment_hex);
 
-    // Send Commitment to Gateway to obtain fresh Challenge c
-    char challenge_req[256];
+    // Send Commitment + PUF Telemetry to Gateway to obtain fresh Challenge c
+    float die_temp = temperatureRead();
+    static uint32_t s_boot_counter = 1;
+    char challenge_req[384];
     snprintf(challenge_req, sizeof(challenge_req),
-             "{\"device_id\":\"%s\",\"commitment\":\"%s\"}",
-             g_device_id, commitment_hex);
+             "{\"device_id\":\"%s\",\"commitment\":\"%s\",\"telemetry\":{\"temperature\":%.2f,\"voltage\":3.30,\"boot_count\":%lu}}",
+             g_device_id, commitment_hex, die_temp, (unsigned long)s_boot_counter);
 
     char challenge_resp[512] = {0};
     int http_code = 0;
@@ -218,6 +227,7 @@ bool perform_schnorr_authentication(void) {
 
     Serial.printf("[ZKP] 2. Gateway Challenge c: %s\n", challenge_hex);
     Serial.printf("[ZKP]    Session ID: %s\n", session_id);
+    Serial.printf("[PUF]    Die Temperature: %.1f°C | Voltage: 3.30V\n", die_temp);
 
     // STEP 2: Compute Response s = (k + c * x) mod q
     char response_hex[70] = {0};
@@ -245,8 +255,8 @@ bool perform_schnorr_authentication(void) {
         Serial.printf("[RESULT] Total Round-Trip Latency: %lu ms\n", elapsed_ms);
         Serial.println("[RESULT] **********************************************\n");
 
-        // Actuate Relay to Unlock Smart Door Lock
-        relay_unlock_timed(DEFAULT_UNLOCK_TIME_MS);
+        // Actuate SG90 Servo / Relay to Unlock Smart Door Latch
+        actuator_unlock_timed(DEFAULT_UNLOCK_TIME_MS);
         digitalWrite(STATUS_LED_PIN, LOW);
         return true;
     } else {
@@ -268,12 +278,31 @@ void setup(void) {
     Serial.begin(115200);
     delay(1000);
 
+    // =========================================================================
+    // BOOT LED TEST: Blink both LEDs 3 times to verify wiring & firmware upload
+    // =========================================================================
+    pinMode(GREEN_LED_PIN, OUTPUT);
+    pinMode(RED_LED_PIN, OUTPUT);
+    Serial.println("[BOOT] LED test: blinking GREEN (D19) and RED (D23) 3 times...");
+    for (int i = 0; i < 3; i++) {
+        digitalWrite(GREEN_LED_PIN, HIGH);
+        digitalWrite(RED_LED_PIN, LOW);
+        delay(300);
+        digitalWrite(GREEN_LED_PIN, LOW);
+        digitalWrite(RED_LED_PIN, HIGH);
+        delay(300);
+    }
+    digitalWrite(RED_LED_PIN, LOW);
+    digitalWrite(GREEN_LED_PIN, LOW);
+    Serial.println("[BOOT] LED test complete.");
+    // =========================================================================
+
     pinMode(AUTH_TRIGGER_PIN, INPUT_PULLUP);
     pinMode(STATUS_LED_PIN, OUTPUT);
     digitalWrite(STATUS_LED_PIN, LOW);
 
-    // 1. Initialize Relay in Fail-Secure Locked State
-    relay_init(DEFAULT_RELAY_GPIO);
+    // 1. Initialize SG90 Servo Actuator in Fail-Secure Locked State (0°)
+    actuator_init(DEFAULT_ACTUATOR_GPIO);
 
     // 2. Extract Hardware Identity
     extract_hardware_identity();
@@ -291,8 +320,15 @@ void setup(void) {
         .gateway_base_url = GATEWAY_SERVER_URL
     };
     if (wifi_network_init(&net_cfg)) {
-        // 5. Register with Zero-Trust Gateway
-        register_with_gateway();
+        // 5. Register with Zero-Trust Gateway (Only if configured as registered device)
+        if (IS_REGISTERED_DEVICE) {
+            register_with_gateway();
+        } else {
+            Serial.println("\n[Zero-Trust] ================================================");
+            Serial.println("[Zero-Trust] RUNNING IN UNREGISTERED / ROGUE DEVICE MODE!");
+            Serial.println("[Zero-Trust] Skipping Gateway registration to verify rejection.");
+            Serial.println("[Zero-Trust] ================================================\n");
+        }
         // Perform initial authentication
         perform_schnorr_authentication();
     } else {

@@ -71,6 +71,25 @@ async def get_device_status(device_id: str):
     return device
 
 
+@router.delete("/device/{device_id}")
+async def deregister_device(device_id: str):
+    """
+    Deregisters/removes an ESP32 hardware device from the Zero-Trust Gateway directory.
+    Subsequent access requests from this device will be rejected as UNKNOWN_DEVICE.
+    """
+    try:
+        res = AuthService.deregister_device(device_id)
+        await ws_manager.broadcast({
+            "event": "DEVICE_DEREGISTERED",
+            "device_id": device_id
+        })
+        return res
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deregistration error: {str(e)}")
+
+
 @router.get("/logs")
 async def get_logs(limit: int = Query(50, ge=1, le=500)):
     """Retrieves historical authentication logs for Zero-Trust audit trail."""
@@ -133,3 +152,23 @@ async def get_puf_metrics():
     """
     metrics = PUFMetricsEvaluator.evaluate_system_benchmarks()
     return metrics
+
+
+@router.get("/puf/telemetry")
+async def get_puf_telemetry(device_id: Optional[str] = None, limit: int = Query(20, ge=1, le=100)):
+    """
+    Returns historical hardware telemetry and ML PUF health scores.
+    """
+    from backend.services.puf_health_service import PufHealthService
+    records = PufHealthService.get_recent_telemetry(device_id=device_id, limit=limit)
+    return {"telemetry": records, "count": len(records)}
+
+
+@router.get("/puf/telemetry/{device_id}")
+async def get_device_puf_telemetry(device_id: str, limit: int = Query(20, ge=1, le=100)):
+    """
+    Returns historical hardware telemetry and ML PUF health scores for a specific device.
+    """
+    from backend.services.puf_health_service import PufHealthService
+    records = PufHealthService.get_recent_telemetry(device_id=device_id, limit=limit)
+    return {"device_id": device_id, "telemetry": records, "count": len(records)}
